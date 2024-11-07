@@ -20,6 +20,9 @@ std::vector<int> listaEspera;
 std::vector<int> idEliminados;
 std::vector<int> jogadoresAssentados;
 std::atomic<bool> eliminado{false};
+std::atomic<bool> cadeirasOcupadas{false};
+std::mutex jogadores_mutex;
+
 
 /*
  * Uso básico de um counting_semaphore em C++:
@@ -126,43 +129,50 @@ public:
 
     void tentar_ocupar_cadeira() {
         // TODO: Tenta ocupar uma cadeira utilizando o semáforo contador quando a música para (aguarda pela variável de condição)
-        cadeira_sem.acquire();
-        jogadoresAssentados.push_back(id);
-        return;
+        if(cadeira_sem.try_acquire()){
+            std::lock_guard<std::mutex> lock(jogadores_mutex);
+            std::cout << "Oi" << std::endl;
+            jogadoresAssentados.push_back(id);
+            listaEspera.pop_back();
+        }
+        else{
+            std::cout << "AQui" << std::endl;
+            cadeirasOcupadas = true;
+            verificar_eliminacao();
+        }
     }
 
-    bool verificar_eliminacao() {
+    void verificar_eliminacao() {
         // TODO: Verifica se foi eliminado após ser destravado do semáforo
+        std::lock_guard<std::mutex> lock(jogadores_mutex);
         for(int i = 0; i < listaEspera.size(); i++){
             if(listaEspera[i] == id){
                 idEliminados.push_back(id); // coloca id na lista de eliminados
                 listaEspera.pop_back();     // esvazia a lista de espera
                 eliminado = true;
-                return eliminado;
+                return;
             }
         }
-        return eliminado;
+        return;
     }
 
     void joga() {
-        // TODO: Aguarda a música parar usando a variavel de condicao
-        std::unique_lock<std::mutex> lock(music_mutex);
-        while(!musica_parada){
-            music_cv.wait(lock);
-        }
-        listaEspera.push_back(id);
+        while(jogo_ativo){
+            // TODO: Aguarda a música parar usando a variavel de condicao
+            std::unique_lock<std::mutex> lock(music_mutex);
+            while(!musica_parada){
+                listaEspera.push_back(id);
+                music_cv.wait(lock);
+            }
 
-        // TODO: Tenta ocupar uma cadeira
-        tentar_ocupar_cadeira();
-        listaEspera.pop_back();
-        music_mutex.unlock();
+            // TODO: Tenta ocupar uma cadeira
+            tentar_ocupar_cadeira();
 
-        // TODO: Verifica se foi eliminado
-        if(verificar_eliminacao()){
-            //break;
-            std::cout << "eliminar thread!" << std::endl;
+            // TODO: Verifica se foi eliminado
+            if(eliminado){
+                break;
+            }
         }
-        return;
     }
 
 private:
@@ -193,6 +203,7 @@ public:
         while(jogo_ativo){
             // Começar o jogo
             jogo.iniciar_rodada();
+            
             if(!jogo_ativo){
                 jogo.anunciarVencedor();
                 return;
@@ -206,31 +217,34 @@ public:
             jogo.parar_musica();
 
             // Exibe Status da rodada
-            jogo.exibir_estado();
+            if(cadeirasOcupadas){
+                jogo.exibir_estado();
+            }
 
             // Elimina jogador
             int idEliminado;
-            if(idEliminados.size() == 1){
-                idEliminado = idEliminados.front();
-                idEliminados.clear();
+            if (!idEliminados.empty()) {
+                int idEliminado = idEliminados.back();
+                jogo.eliminar_jogador(idEliminado);
             }
-            else{
-                std::cout << "Erro ao eliminar jogador!" << std::endl;
-            }
-            jogo.eliminar_jogador(idEliminado);
-            idEliminado = -1; // deletar id e substituir por numero que não corresponde ao id de nenhum jogador
+
         
             // Reiniciar para a próxima rodada
+            musica_parada = false;
             liberar_threads_eliminadas();
             jogadoresAssentados.clear();
             listaEspera.clear();
-            idEliminados.clear();
+            //idEliminados.clear();
+            eliminado = false;
+            cadeirasOcupadas = false;
+            idEliminado = -1; // deletar id e substituir por numero que não corresponde ao id de nenhum jogador
         }
     }
 
     void liberar_threads_eliminadas() {
         // Libera múltiplas permissões no semáforo para destravar todas as threads que não conseguiram se sentar
-        cadeira_sem.release(NUM_JOGADORES - 1); // Libera o número de permissões igual ao número de jogadores que ficaram esperando
+        std::lock_guard<std::mutex> lock(jogadores_mutex);
+        cadeira_sem.release(idEliminados.size()); // Libera o número de permissões igual ao número de jogadores que ficaram esperando
     }
 
 private:
