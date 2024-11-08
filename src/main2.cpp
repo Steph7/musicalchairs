@@ -13,7 +13,10 @@
 constexpr int NUM_JOGADORES = 4;
 std::counting_semaphore<NUM_JOGADORES> cadeira_sem(NUM_JOGADORES - 1); // Inicia com n-1 cadeiras, capacidade máxima n
 std::condition_variable music_cv;
+std::condition_variable proximaRodada_cv;
+std::mutex rodada_mutex;
 std::mutex music_mutex;
+std::mutex impressao_mutex;
 std::atomic<bool> musica_parada{false};
 std::atomic<bool> jogo_ativo{true};
 std::vector<int> listaEspera;
@@ -23,6 +26,7 @@ std::atomic<bool> eliminado{false};
 std::atomic<bool> cadeirasOcupadas{false};
 std::mutex jogadores_mutex;
 int contadorRodadas = 0;
+int contadorJogadoresOK = 1;
 std::atomic<bool> ultimaRodada{false};
 
 
@@ -60,7 +64,7 @@ public:
         return;    
     }
 
-    void prepararProximarodada(int idEliminado){
+    void prepararProximarodada(){
         setValuejogadores(getValuejogadores() - 1); // reduzir número de jogadores
         setValuecadeiras(getValuecadeiras() - 1);  // reduzir número de cadeiras
 
@@ -76,7 +80,6 @@ public:
         listaEspera.clear();
         eliminado = false;
         cadeirasOcupadas = false;
-        idEliminado = -1; // deletar id e substituir por numero que não corresponde ao id de nenhum jogador
         contadorRodadas++;
     }
 
@@ -111,6 +114,7 @@ public:
         musica_parada = true;        
         music_cv.notify_all();
         
+        std::lock_guard<std::mutex> lock3(impressao_mutex);
         std::cout << "> A música parou! Os jogadores estão tentando se sentar..." << std::endl;
         std::cout << std::endl;
         std::cout << "----------------------------------------------" << std::endl;
@@ -120,6 +124,7 @@ public:
     void eliminar_jogador(int jogador_id) {
         // TODO: Elimina um jogador que não conseguiu uma cadeira
 
+        std::lock_guard<std::mutex> lock3(impressao_mutex);
         std::cout << "Jogador P" << jogador_id << " não conseguiu uma cadeira e foi eliminado!" << std::endl;
         std::cout << "----------------------------------------------" << std::endl;
         return;
@@ -128,6 +133,7 @@ public:
     void exibir_estado() {
         // TODO: Exibe o estado atual das cadeiras e dos jogadores
         std::lock_guard<std::mutex> lock(jogadores_mutex);
+        std::lock_guard<std::mutex> lock3(impressao_mutex);
         for(int i = 1; i <= jogadoresAssentados.size(); i++){
            std::cout << "[Cadeira " << i << "]: Ocupada por P" << jogadoresAssentados[i-1] << std::endl;
         }
@@ -137,6 +143,7 @@ public:
 
     void anunciarVencedor(){
         std::lock_guard<std::mutex> lock(jogadores_mutex);
+        std::lock_guard<std::mutex> lock3(impressao_mutex);
         std::cout << "🏆 Vencedor: Jogador P" << jogadoresAssentados[0] << "! Parabéns! 🏆" <<std::endl;
         std::cout << "----------------------------------------------" << std::endl;
         std::cout << "Obrigado por jogar o Jogo das Cadeiras Concorrente!" << std::endl;
@@ -177,7 +184,7 @@ public:
             jogadoresAssentados.push_back(id);
             listaEspera.pop_back();
 
-            std::cout << "Sentado" << id << std::endl;
+            //std::cout << "Sentado" << id << std::endl;
 
             if(ultimaRodada){
                 jogo_ativo = false;
@@ -222,8 +229,16 @@ public:
             }
 
             if(eliminado){
+                jogo.eliminar_jogador(id);
+
+                std::unique_lock<std::mutex> lock2(rodada_mutex);
+                proximaRodada_cv.notify_all(); 
                 break;
             }
+            
+            std::unique_lock<std::mutex> lock2(rodada_mutex);
+            proximaRodada_cv.notify_all(); // avisar a Thread coordenadora que o jogador já terminou essa rodada
+            //std::cout << "Jogador OK" << id << std::endl;
         }
     }
 
@@ -247,6 +262,7 @@ public:
 
     void iniciar_jogo() {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        
         // TODO: Começa o jogo, dorme por um período aleatório, e então para a música, sinalizando os jogadores 
         std::cout << "----------------------------------------------- " << std::endl;
         std::cout << "  Bem-vindo ao Jogo das Cadeiras Concorrente.   " << std::endl;
@@ -272,25 +288,23 @@ public:
             jogo.parar_musica();
 
             // Exibe Status da rodada
-            jogo.exibir_estado();
             if(cadeirasOcupadas){
                 jogo.exibir_estado();
             }
 
-            // Elimina jogador
-            int idEliminado;
-            for(int i; i < idEliminados.size(); i++){
-                if (!idEliminados.empty()) {
-                    idEliminado = idEliminados.back();
-                    jogo.eliminar_jogador(idEliminado);
-                }
-            }
-            //jogo.eliminar_jogador(idEliminado);
+            
+            while(contadorJogadoresOK < jogo.getValuejogadores()-1){
+                std::unique_lock<std::mutex> lock2(rodada_mutex);
+                proximaRodada_cv.wait(lock2);
 
+                contadorJogadoresOK++;
+                //std::cout << contadorJogadoresOK << std::endl;
+            }
 
             // Reiniciar para a próxima rodada
-            jogo.prepararProximarodada(idEliminado);
+            jogo.prepararProximarodada();
             //liberar_threads_eliminadas();
+
         }
     }
 
