@@ -177,7 +177,7 @@ public:
             jogadoresAssentados.push_back(id);
             listaEspera.pop_back();
 
-            //std::cout << "Sentado" << id << std::endl;
+            std::cout << "Sentado" << id << std::endl;
 
             if(ultimaRodada){
                 jogo_ativo = false;
@@ -272,20 +272,24 @@ public:
             jogo.parar_musica();
 
             // Exibe Status da rodada
+            jogo.exibir_estado();
             if(cadeirasOcupadas){
                 jogo.exibir_estado();
             }
 
             // Elimina jogador
             int idEliminado;
-            if (!idEliminados.empty()) {
-                int idEliminado = idEliminados.back();
-                jogo.eliminar_jogador(idEliminado);
+            for(int i; i < idEliminados.size(); i++){
+                if (!idEliminados.empty()) {
+                    idEliminado = idEliminados.back();
+                    jogo.eliminar_jogador(idEliminado);
+                }
             }
+            //jogo.eliminar_jogador(idEliminado);
 
 
             // Reiniciar para a próxima rodada
-            jogo.prepararProximarodada(idEliminados.back());
+            jogo.prepararProximarodada(idEliminado);
             //liberar_threads_eliminadas();
         }
     }

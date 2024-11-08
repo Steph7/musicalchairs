@@ -23,6 +23,7 @@ std::atomic<bool> eliminado{false};
 std::atomic<bool> cadeirasOcupadas{false};
 std::mutex jogadores_mutex;
 int contadorRodadas = 0;
+std::atomic<bool> ultimaRodada{false};
 
 
 /*
@@ -52,32 +53,70 @@ public:
     JogoDasCadeiras(int num_jogadores)
         : num_jogadores(num_jogadores), cadeiras(num_jogadores - 1) {}
 
+
+    void setValuejogadores(int novoNumjogadores){
+        num_jogadores = novoNumjogadores;
+    }
+
+    int getValuejogadores() const{
+        return num_jogadores;
+    }
+
+    void setValuecadeiras(int novoNumcadeiras){
+        cadeiras = novoNumcadeiras ;
+    }
+
+    int getValuecadeiras() const{
+        return cadeiras;
+    }
+
+
     void iniciar_rodada() {
         // TODO: Inicia uma nova rodada, removendo uma cadeira e ressincronizando o semáforo
-        if(num_jogadores == NUM_JOGADORES){
-            imprimirInicio(num_jogadores, cadeiras);
-            return;
-        }
-        else{
-            num_jogadores = num_jogadores - 1; // atualiza quantidade de jogadores
-            if(num_jogadores == 1){
-                jogo_ativo = false;
-                return;
-            }
-            else{
-                cadeiras = num_jogadores - 1;      // atualiza quantidade de cadeiras
-                cadeira_sem.release(cadeiras);
-                musica_parada = false;
-
-                imprimirInicio(num_jogadores, cadeiras);
-                return;
-            }
-        }
+        imprimirInicio(getValuejogadores(), getValuecadeiras());
         return;    
     }
 
+    void prepararProximarodada(int idEliminado){
+        setValuejogadores(getValuejogadores() - 1); // reduzir número de jogadores
+        setValuecadeiras(getValuecadeiras() - 1);  // reduzir número de cadeiras
+
+        if(getValuecadeiras() == 1){
+            ultimaRodada = true;
+        }
+        redefinirSemaforo(getValuecadeiras());      // atualizar número de tokens disponíveis no semáforo
+
+        musica_parada = false;
+
+        std::lock_guard<std::mutex> lock(jogadores_mutex);
+        jogadoresAssentados.clear();
+        listaEspera.clear();
+        eliminado = false;
+        cadeirasOcupadas = false;
+        idEliminado = -1; // deletar id e substituir por numero que não corresponde ao id de nenhum jogador
+        contadorRodadas++;
+    }
+
+    void redefinirSemaforo(int novoValor){
+        int cadeirasAtuais = 0;
+        while (cadeirasAtuais < novoValor){
+            cadeira_sem.release();
+            cadeirasAtuais++;
+        }
+        while (cadeirasAtuais > novoValor){
+            cadeira_sem.release();
+            cadeirasAtuais--;
+        }
+    }
+
     void imprimirInicio(int num_jogadores, int cadeiras){
-        std::cout << "Iniciando rodada com " << num_jogadores << " jogadores e " << cadeiras << " cadeiras." << std::endl;
+        if(contadorRodadas == 0){
+            std::cout << "PRIMEIRA RODADA" << std::endl;
+            std::cout << "Iniciando rodada com " << getValuejogadores() << " jogadores e " << getValuecadeiras() << " cadeiras." << std::endl;
+        }
+        else{
+            std::cout << "Próxima rodada com " << getValuejogadores() << " jogadores e " << getValuecadeiras() << " cadeiras." << std::endl;
+        }
         std::cout << "A música está tocando... 🎵" << std::endl;
         std::cout << std::endl;
         return;
