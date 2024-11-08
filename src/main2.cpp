@@ -197,11 +197,9 @@ public:
     }
 
     void verificar_eliminacao() {
-        // TODO: Verifica se foi eliminado após ser destravado do semáforo
+        // TODO: Verifica se foi eliminado após ser destravado do semáforo        
         std::lock_guard<std::mutex> lock(jogadores_mutex);
-        
         if(listaEspera.back() == id){
-            std::lock_guard<std::mutex> lock(jogadores_mutex);
             idEliminados.push_back(id); // coloca id na lista de eliminados
             listaEspera.pop_back();     // esvazia a lista de espera
             eliminado = true;
@@ -269,16 +267,16 @@ public:
         std::cout << "----------------------------------------------- " << std::endl;
         std::cout << std::endl;
 
-        while((jogo_ativo) && (contadorRodadas < 3)){
+        //while((jogo_ativo) && (contadorRodadas < 3)){
+        while(contadorRodadas < 3){
+        //while(jogo_ativo){
             // Começar o jogo
             jogo.iniciar_rodada();
-            
             
             if(!jogo_ativo){
                 jogo.anunciarVencedor();
                 break;
             }
-            
 
             // Espera um tempo aleatório
             int tempo = tempoVariavel(100, 150);   // Gerar número aleatório
@@ -292,19 +290,16 @@ public:
                 jogo.exibir_estado();
             }
 
-            
-            while(contadorJogadoresOK < jogo.getValuejogadores()-1){
+            while(contadorJogadoresOK < jogo.getValuejogadores()){
                 std::unique_lock<std::mutex> lock2(rodada_mutex);
                 proximaRodada_cv.wait(lock2);
-
                 contadorJogadoresOK++;
-                //std::cout << contadorJogadoresOK << std::endl;
             }
-
+        
+        
             // Reiniciar para a próxima rodada
             jogo.prepararProximarodada();
             //liberar_threads_eliminadas();
-
         }
     }
 
