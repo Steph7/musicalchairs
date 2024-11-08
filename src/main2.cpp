@@ -71,13 +71,21 @@ public:
         if(getValuecadeiras() == 1){
             ultimaRodada = true;
         }
-        redefinirSemaforo(getValuecadeiras());      // atualizar número de tokens disponíveis no semáforo
+        //redefinirSemaforo(getValuecadeiras());      // atualizar número de tokens disponíveis no semáforo
+        cadeira_sem.release(getValuecadeiras());
 
         musica_parada = false;
 
+        /*
         std::lock_guard<std::mutex> lock(jogadores_mutex);
-        jogadoresAssentados.clear();
-        listaEspera.clear();
+        if(!jogadoresAssentados.empty()){
+            jogadoresAssentados.clear();
+        }
+        if(!listaEspera.empty()){
+            listaEspera.clear();
+        }
+        */
+
         eliminado = false;
         cadeirasOcupadas = false;
         contadorRodadas++;
@@ -154,7 +162,7 @@ public:
         num_jogadores = novoNumjogadores;
     }
 
-    int getValuejogadores() const{
+    int getValuejogadores(){
         return num_jogadores;
     }
 
@@ -162,7 +170,7 @@ public:
         cadeiras = novoNumcadeiras ;
     }
 
-    int getValuecadeiras() const{
+    int getValuecadeiras(){
         return cadeiras;
     }
  
@@ -177,34 +185,37 @@ public:
     Jogador(int id, JogoDasCadeiras& jogo)
         : id(id), jogo(jogo) {}
 
-    void tentar_ocupar_cadeira() {
+    bool tentar_ocupar_cadeira() {
         // TODO: Tenta ocupar uma cadeira utilizando o semáforo contador quando a música para (aguarda pela variável de condição)
-        if(cadeira_sem.try_acquire()){
-            std::lock_guard<std::mutex> lock(jogadores_mutex);
-            jogadoresAssentados.push_back(id);
-            listaEspera.pop_back();
+        while(!cadeirasOcupadas){
+            if(cadeira_sem.try_acquire()){
+                std::lock_guard<std::mutex> lock(jogadores_mutex);
+                jogadoresAssentados.push_back(id);
+                listaEspera.pop_back();
 
-            //std::cout << "Sentado" << id << std::endl;
+                //std::cout << "Sentado" << id << std::endl;
 
-            if(ultimaRodada){
-                jogo_ativo = false;
+                if(ultimaRodada){
+                    jogo_ativo = false;
+                }
+                return true;
             }
+            else{
+                //std::cout << "Jogador FORA:" << id << std::endl;
+                cadeirasOcupadas = true;
+                idEliminados.push_back(id); // coloca id na lista de eliminados
+                listaEspera.pop_back();     // esvazia a lista de espera
+                eliminado = true;
+                return false;
+            }
+            return true;
         }
-        else{
-            //std::cout << "Jogador FORA:" << id << std::endl;
-            cadeirasOcupadas = true;
-        }
+        return true;
     }
 
     void verificar_eliminacao() {
         // TODO: Verifica se foi eliminado após ser destravado do semáforo        
-        std::lock_guard<std::mutex> lock(jogadores_mutex);
-        if(listaEspera.back() == id){
-            idEliminados.push_back(id); // coloca id na lista de eliminados
-            listaEspera.pop_back();     // esvazia a lista de espera
-            eliminado = true;
-            return;
-        }
+        
         
         return;
     }
@@ -218,25 +229,28 @@ public:
 
             // TODO: Tenta ocupar uma cadeira
             if(musica_parada){
-                tentar_ocupar_cadeira();
+                if(tentar_ocupar_cadeira()){
+                    std::unique_lock<std::mutex> lock2(rodada_mutex);
+                    proximaRodada_cv.notify_all(); // avisar a Thread coordenadora que o jogador já terminou essa rodada
+                    //std::cout << "Jogador OK" << id << std::endl;
+                }
+                else{
+                    if(eliminado){
+                        jogo.eliminar_jogador(id);
+
+                        std::unique_lock<std::mutex> lock2(rodada_mutex);
+                        proximaRodada_cv.notify_all(); 
+                        break;
+                    }
+                }
             }
             
             // TODO: Verifica se foi eliminado
+            /*
             if(cadeirasOcupadas){
                 verificar_eliminacao();
             }
-
-            if(eliminado){
-                jogo.eliminar_jogador(id);
-
-                std::unique_lock<std::mutex> lock2(rodada_mutex);
-                proximaRodada_cv.notify_all(); 
-                break;
-            }
-            
-            std::unique_lock<std::mutex> lock2(rodada_mutex);
-            proximaRodada_cv.notify_all(); // avisar a Thread coordenadora que o jogador já terminou essa rodada
-            //std::cout << "Jogador OK" << id << std::endl;
+            */
         }
     }
 
@@ -286,9 +300,11 @@ public:
             jogo.parar_musica();
 
             // Exibe Status da rodada
+            jogo.exibir_estado(); 
             if(cadeirasOcupadas){
                 jogo.exibir_estado();
             }
+            
 
             while(contadorJogadoresOK < jogo.getValuejogadores()){
                 std::unique_lock<std::mutex> lock2(rodada_mutex);
