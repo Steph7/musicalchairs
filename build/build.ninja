@@ -49,8 +49,8 @@ cmake_ninja_workdir = /workspace/build/
 
 build cmake_object_order_depends_target_JogoDasCadeiras: phony || CMakeFiles/JogoDasCadeiras.dir
 
-build CMakeFiles/JogoDasCadeiras.dir/src/main2.cpp.o: CXX_COMPILER__JogoDasCadeiras_Debug /workspace/src/main2.cpp || cmake_object_order_depends_target_JogoDasCadeiras
-  DEP_FILE = CMakeFiles/JogoDasCadeiras.dir/src/main2.cpp.o.d
+build CMakeFiles/JogoDasCadeiras.dir/src/novamain.cpp.o: CXX_COMPILER__JogoDasCadeiras_Debug /workspace/src/novamain.cpp || cmake_object_order_depends_target_JogoDasCadeiras
+  DEP_FILE = CMakeFiles/JogoDasCadeiras.dir/src/novamain.cpp.o.d
   FLAGS = -g -std=gnu++20
   OBJECT_DIR = CMakeFiles/JogoDasCadeiras.dir
   OBJECT_FILE_DIR = CMakeFiles/JogoDasCadeiras.dir/src
@@ -63,7 +63,7 @@ build CMakeFiles/JogoDasCadeiras.dir/src/main2.cpp.o: CXX_COMPILER__JogoDasCadei
 #############################################
 # Link the executable JogoDasCadeiras
 
-build JogoDasCadeiras: CXX_EXECUTABLE_LINKER__JogoDasCadeiras_Debug CMakeFiles/JogoDasCadeiras.dir/src/main2.cpp.o
+build JogoDasCadeiras: CXX_EXECUTABLE_LINKER__JogoDasCadeiras_Debug CMakeFiles/JogoDasCadeiras.dir/src/novamain.cpp.o
   FLAGS = -g
   OBJECT_DIR = CMakeFiles/JogoDasCadeiras.dir
   POST_BUILD = :
